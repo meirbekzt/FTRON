@@ -13,12 +13,16 @@ module part3
 		VGA_SYNC_N,						//	VGA SYNC
 		VGA_R,   						//	VGA Red[9:0]
 		VGA_G,	 						//	VGA Green[9:0]
-		VGA_B   						//	VGA Blue[9:0]
+		VGA_B,   						//	VGA Blue[9:0]
+		PS2_DAT,
+		PS2_CLK
 	);
 
 	input			CLOCK_50;				//	50 MHz
 	input   [9:0]   SW;
 	input   [3:0]   KEY;
+	input PS2_DAT;
+	input PS2_CLK;
 
 
 	// Declare your inputs and outputs here
@@ -34,6 +38,8 @@ module part3
 	
 	wire resetn;
 	assign resetn = KEY[0];
+	wire reset;
+	assign reset = ~KEY[3];
 
 	wire go;
 	assign go = ~KEY[1];
@@ -73,8 +79,32 @@ module part3
 		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
 		defparam VGA.BACKGROUND_IMAGE = "black.mif";
 			
-	// Put your code here. Your code should produce signals x,y,colour and writeEn/plot
-	// for the VGA controller, in addition to any other functionality your design may require.
+	wire valid, makeBreak;
+	wire [7:0] outCode;
+	wire [1:0] dir;
+	reg [1:0] n_dir;
+
+	keyboard_press_driver keyboard_press_driver(
+		.CLOCK_50(CLOCK_50),
+		.valid(valid),
+		.makeBreak(makeBreak),
+		.outCode(outCode),
+		.reset(reset),
+		.PS2_DAT(PS2_DAT),
+		.PS2_CLK(PS2_CLK),
+	);
+	
+	always @(*) begin
+		if (outCode == 8'h75)
+			n_dir = 2'b01;
+		if (outCode == 8'h74)
+			n_dir = 2'b11;
+		if (outCode == 8'h72)
+			n_dir = 2'b00;
+		if (outCode == 8'h6b)
+			n_dir = 2'b10;
+	end
+	assign dir = n_dir;
     
 	// Instantiate datapath
 	datapath d0(
@@ -83,7 +113,7 @@ module part3
 		.y_ctr(y_ctr),
 		.resetn(resetn),
 		.clk(CLOCK_50),
-		.dir(SW[1:0]),
+		.dir(dir),
 		.x_out(x),
 		.y_out(y),
 		.update(update)
