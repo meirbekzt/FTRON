@@ -231,6 +231,7 @@ module control(clk, resetn, go, plot, update, colour, colour_out, kill);
 					S_DRAW_FINISH = 3'd2,
 					S_WAIT				= 3'd3,
 					S_UPDATE		=3'd4;
+                    S_KILL          = 3'd5;
 					
 
 
