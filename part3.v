@@ -69,10 +69,10 @@ module part3
 			.VGA_BLANK(VGA_BLANK_N),
 			.VGA_SYNC(VGA_SYNC_N),
 			.VGA_CLK(VGA_CLK));
-		defparam VGA.RESOLUTION = "160x120";
-		defparam VGA.MONOCHROME = "FALSE";
-		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
-		defparam VGA.BACKGROUND_IMAGE = "black.mif";
+	defparam VGA.RESOLUTION = "160x120";
+	defparam VGA.MONOCHROME = "FALSE";
+	defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
+	defparam VGA.BACKGROUND_IMAGE = "display.mif";
 			
 	wire valid, makeBreak;
 	wire [7:0] outCode;
