@@ -134,6 +134,7 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	input update;
 	input [1:0] dir;
 	
+    output reg kill;
 	output reg [7:0] x_out;
 	output reg [6:0] y_out;
 	
@@ -141,6 +142,10 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 			    S_RIGHT = 3'd1,
 				S_DOWN = 3'd2,
 				S_LEFT = 3'd3;
+                TOP_EDGE = 7'd0;
+                BOTTOM_EDGE = 7'd119;
+                LEFT_EDGE = 8'd0;
+                RIGHT_EDGE = 8'd159;
 	
 	// data registers
 	reg [7:0] x;
@@ -169,6 +174,7 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
             x <= 8'd0;
             y <= 7'd60;
 			current_dir <= S_UP;
+            kill <= 1'b0;
 		end
 			
 		else begin
@@ -178,6 +184,9 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 			end
 
 			if (update) begin
+                if (x == RIGHT_EDGE || x == LEFT_EDGE || y == TOP_EDGE || y == BOTTOM_EDGE)
+                    kill <= 1'b1;
+
 				current_dir <= next_dir;
 				case (current_dir)
 					S_UP: begin y <= y - 1'b1;
@@ -198,13 +207,13 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	end
 endmodule
 
-module control(clk, resetn, go, plot, update, colour, colour_out);
+module control(clk, resetn, go, plot, update, colour, colour_out, kill);
 	input clk;
 	input resetn;
 	input go;
 	input [2:0] colour;
+    input kill;
 	output reg [2:0] colour_out;
-
 
 	output reg plot;
 	output reg update;
@@ -248,7 +257,8 @@ module control(clk, resetn, go, plot, update, colour, colour_out);
 			S_DRAW: next_state = S_DRAW_FINISH;
 			S_DRAW_FINISH: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
-			S_UPDATE: next_state = S_DRAW;
+			S_UPDATE: next_state = kill ? S_KILL : S_DRAW;
+            S_KILL: next_state = S_KILL;
 			default: next_state = S_START;
 		endcase
 	end
@@ -282,6 +292,9 @@ module control(clk, resetn, go, plot, update, colour, colour_out);
 			S_UPDATE: begin
 				update = 1'b1;
 			end
+
+            S_KILL begin
+            end
 		endcase
 	end
 	
