@@ -44,14 +44,11 @@ module part3
 	wire go;
 	assign go = ~KEY[1];
 	// Create the colour, x, y and writeEn wires that are inputs to the controller.
-	wire [2:0] colour;
 	wire [2:0] colour_out;
 	wire [7:0] x;
 	wire [6:0] y;
 	wire writeEn;
 	wire update;
-
-	assign colour = SW[9:7];
 
 	// Create an Instance of a VGA controller - there can be only one!
 	// Define the number of colours as well as the initial background
@@ -81,6 +78,7 @@ module part3
 	wire [7:0] outCode;
 	wire [1:0] dir;
 	reg [1:0] n_dir;
+	wire kill;
 
 	keyboard_press_driver keyboard_press_driver(
 		.CLOCK_50(CLOCK_50),
@@ -112,7 +110,8 @@ module part3
 		.dir(dir),
 		.x_out(x),
 		.y_out(y),
-		.update(update)
+		.update(update),
+		.kill(kill)
 		);
 
     // Instansiate FSM control
@@ -120,14 +119,14 @@ module part3
 		.clk(CLOCK_50),
 		.resetn(resetn),
 		.go(go),
+		.kill(kill),
 		.plot(writeEn),
 		.update(update),
-		.colour(colour),
 		.colour_out(colour_out)
 		);
 endmodule
 
-module datapath(plot, resetn, clk, x_out, y_out, update, dir);
+module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
 	input plot;
 	input resetn;
 	input clk;
@@ -141,11 +140,26 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	localparam 	S_UP = 3'd0,
 			    S_RIGHT = 3'd1,
 				S_DOWN = 3'd2,
-				S_LEFT = 3'd3;
-                TOP_EDGE = 7'd0;
-                BOTTOM_EDGE = 7'd119;
-                LEFT_EDGE = 8'd0;
+				S_LEFT = 3'd3,
+                TOP_EDGE = 7'd0,
+                BOTTOM_EDGE = 7'd119,
+                LEFT_EDGE = 8'd0,
                 RIGHT_EDGE = 8'd159;
+	
+	reg [7:0] start_x;
+	reg [6:0] start_y;
+	parameter player = 1;
+	always @(*)
+		begin
+		if (player == 1) begin
+			start_x = 8'd40;
+			start_y = 8'd60;
+			end
+		else begin
+			start_x = 8'd120;
+			start_y = 8'd60;
+			end
+		end
 	
 	// data registers
 	reg [7:0] x;
@@ -169,10 +183,10 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	always @(posedge clk) begin
 		if (~resetn) begin
 			// initalize all values
-			x_out <= 8'd0;
-			y_out <= 7'd60;
-            x <= 8'd0;
-            y <= 7'd60;
+			x_out <= start_x;
+			y_out <= start_y;
+            x <= start_x;
+            y <= start_y;
 			current_dir <= S_UP;
             kill <= 1'b0;
 		end
@@ -207,16 +221,29 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	end
 endmodule
 
-module control(clk, resetn, go, plot, update, colour, colour_out, kill);
+module control(clk, resetn, go, plot, update, colour_out, kill);
 	input clk;
 	input resetn;
 	input go;
-	input [2:0] colour;
     input kill;
 	output reg [2:0] colour_out;
 
 	output reg plot;
 	output reg update;
+	
+	
+	reg [2:0] colour;
+	
+	parameter player = 1;
+	always@(*)
+	begin
+		if (player == 1) begin
+			colour = 3'b010;
+			end
+		else begin
+			colour = 3'b011;
+			end
+	end
 	
 	reg reset_frame;
 
@@ -230,7 +257,7 @@ module control(clk, resetn, go, plot, update, colour, colour_out, kill);
 					S_DRAW		= 3'd1,
 					S_DRAW_FINISH = 3'd2,
 					S_WAIT				= 3'd3,
-					S_UPDATE		=3'd4;
+					S_UPDATE		=3'd4,
                     S_KILL          = 3'd5;
 					
 
@@ -273,9 +300,6 @@ module control(clk, resetn, go, plot, update, colour, colour_out, kill);
 		update = 1'b0;
 		
 		case (current_state)
-			S_START: begin
-			end
-
 			S_DRAW: begin
 				plot = 1'b1;
 				colour_out = colour;
@@ -293,9 +317,6 @@ module control(clk, resetn, go, plot, update, colour, colour_out, kill);
 			S_UPDATE: begin
 				update = 1'b1;
 			end
-
-            S_KILL begin
-            end
 		endcase
 	end
 	
