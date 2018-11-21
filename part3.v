@@ -49,8 +49,6 @@ module part3
 	wire [7:0] x;
 	wire [6:0] y;
 	wire writeEn;
-	wire [1:0] x_ctr;
-	wire [1:0] y_ctr;
 	wire update;
 
 	assign colour = SW[9:7];
@@ -109,8 +107,6 @@ module part3
 	// Instantiate datapath
 	datapath d0(
 		.plot(writeEn),
-		.x_ctr(x_ctr),
-		.y_ctr(y_ctr),
 		.resetn(resetn),
 		.clk(CLOCK_50),
 		.dir(dir),
@@ -125,20 +121,16 @@ module part3
 		.resetn(resetn),
 		.go(go),
 		.plot(writeEn),
-		.draw_x(x_ctr),
-		.draw_y(y_ctr),
 		.update(update),
 		.colour(colour),
 		.colour_out(colour_out)
 		);
 endmodule
 
-module datapath(plot, x_ctr, y_ctr, resetn, clk, x_out, y_out, update, dir);
+module datapath(plot, resetn, clk, x_out, y_out, update, dir);
 	input plot;
 	input resetn;
 	input clk;
-	input [1:0] x_ctr;
-	input [1:0] y_ctr;
 	input update;
 	input [1:0] dir;
 	
@@ -181,8 +173,8 @@ module datapath(plot, x_ctr, y_ctr, resetn, clk, x_out, y_out, update, dir);
 			
 		else begin
 			if (plot) begin
-				x_out <= x + x_ctr;
-				y_out <= y + y_ctr;
+				x_out <= x;
+				y_out <= y;
 			end
 
 			if (update) begin
@@ -206,7 +198,7 @@ module datapath(plot, x_ctr, y_ctr, resetn, clk, x_out, y_out, update, dir);
 	end
 endmodule
 
-module control(clk, resetn, go, plot, draw_x, draw_y, update, colour, colour_out);
+module control(clk, resetn, go, plot, update, colour, colour_out);
 	input clk;
 	input resetn;
 	input go;
@@ -215,11 +207,8 @@ module control(clk, resetn, go, plot, draw_x, draw_y, update, colour, colour_out
 
 
 	output reg plot;
-	output [1:0] draw_x;
-	output [1:0] draw_y;
 	output reg update;
 	
-	wire [3:0] grid_wire;	
 	reg reset_frame;
 
 	// wires for delay counter and frame counter
@@ -234,16 +223,7 @@ module control(clk, resetn, go, plot, draw_x, draw_y, update, colour, colour_out
 					S_WAIT				= 3'd3,
 					S_UPDATE		=3'd4;
 					
-	
-	four_bit_counter grid(
-		.resetn(plot),
-		.clk(clk),
-		.enable(plot),
-		.q(grid_wire)
-	);
 
-	assign draw_x = grid_wire[1:0];
-	assign draw_y = grid_wire[3:2];	
 
 	n_counter #(19) delay_counter(
 		.clk(clk),
@@ -265,7 +245,7 @@ module control(clk, resetn, go, plot, draw_x, draw_y, update, colour, colour_out
 	begin: state_table
 		case (current_state)
 			S_START: next_state = go ? S_DRAW : S_START;
-			S_DRAW: next_state = &draw_x && &draw_y ? S_DRAW_FINISH : S_DRAW;
+			S_DRAW: next_state = S_DRAW_FINISH;
 			S_DRAW_FINISH: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
 			S_UPDATE: next_state = S_DRAW;
@@ -313,20 +293,3 @@ module control(clk, resetn, go, plot, draw_x, draw_y, update, colour, colour_out
             current_state <= next_state;
     end // state_FFS
 endmodule
-
-
-module four_bit_counter(resetn, clk, enable, q);
-	input resetn;
-	input clk;
-	input enable;
-	output reg [3:0] q;
-	
-	
-	always @(posedge clk) begin
-		if (!resetn) 
-			q <= 0;
-		else if (enable) 
-			q <= q + 1;
-	end
-endmodule
-
