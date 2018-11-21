@@ -94,15 +94,15 @@ module part3
 		.PS2_CLK(PS2_CLK),
 	);
 	
-	always @(*) begin
+	always @(posedge CLOCK_50) begin
 		if (outCode == 8'h75)
-			n_dir = 2'b01;
+			n_dir <= 2'b01;
 		if (outCode == 8'h74)
-			n_dir = 2'b11;
+			n_dir <= 2'b11;
 		if (outCode == 8'h72)
-			n_dir = 2'b00;
+			n_dir <= 2'b00;
 		if (outCode == 8'h6b)
-			n_dir = 2'b10;
+			n_dir <= 2'b10;
 	end
 	assign dir = n_dir;
     
