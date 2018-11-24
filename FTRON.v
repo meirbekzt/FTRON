@@ -165,10 +165,8 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, dir, kill);
 	// data registers
 	reg [7:0] next_x;
 	reg [6:0] next_y;
-	// direction registers, 1 if going right, 0 if left
-	// 1 if going up, 0 if going down
 	
-	reg [2:0] current_dir, next_dir;
+	reg [1:0] current_dir, next_dir;
 	
 	always @(*)
 	begin: state_table
