@@ -40,7 +40,7 @@ module FTRON
 
 	wire go;
 	assign go = ~KEY[1];
-	// Create the colour, x, y and writeEn wires that are inputs to the controller.
+	// Create the colour, cur_x, cur_y and writeEn wires that are inputs to the controller.
 	wire [2:0] colour_out;
 	wire [7:0] x;
 	wire [6:0] y;
@@ -105,8 +105,8 @@ module FTRON
 		.resetn(resetn),
 		.clk(CLOCK_50),
 		.dir(dir),
-		.x_out(x),
-		.y_out(y),
+		.cur_x(x),
+		.cur_y(y),
 		.update(update),
 		.kill(kill)
 		);
@@ -123,7 +123,7 @@ module FTRON
 		);
 endmodule
 
-module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
+module datapath(plot, resetn, clk, cur_x, cur_y, update, dir, kill);
 	input plot;
 	input resetn;
 	input clk;
@@ -131,8 +131,8 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
 	input [1:0] dir;
 	
     output reg kill;
-	output reg [7:0] x_out;
-	output reg [6:0] y_out;
+	output reg [7:0] cur_x;
+	output reg [6:0] cur_y;
 	
 	localparam 	S_UP = 3'd0,
 			    S_RIGHT = 3'd1,
@@ -142,6 +142,10 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
                 BOTTOM_EDGE = 7'd119,
                 LEFT_EDGE = 8'd0,
                 RIGHT_EDGE = 8'd159;
+	
+	// registers for drawing border coordinates
+	reg [7:0] border_x;
+	reg [6:0] border_y;
 	
 	reg [7:0] start_x;
 	reg [6:0] start_y;
@@ -159,8 +163,8 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
 		end
 	
 	// data registers
-	reg [7:0] x;
-	reg [6:0] y;
+	reg [7:0] next_x;
+	reg [6:0] next_y;
 	// direction registers, 1 if going right, 0 if left
 	// 1 if going up, 0 if going down
 	
@@ -180,43 +184,53 @@ module datapath(plot, resetn, clk, x_out, y_out, update, dir, kill);
 	always @(posedge clk) begin
 		if (~resetn) begin
 			// initalize all values
-			x_out <= start_x;
-			y_out <= start_y;
-            x <= start_x;
-            y <= start_y;
-			current_dir <= S_UP;
+			cur_x <= start_x;
+			cur_y <= start_y;
+            next_x <= start_x;
+            next_y <= start_y;
+			current_dir <= S_RIGHT;
             kill <= 1'b0;
 		end
 			
 		else begin
-			if (plot) begin
-				x_out <= x;
-				y_out <= y;
-			end
-
+			if (plot && ~kill) begin
+					cur_x <= next_x;
+					cur_y <= next_y;
+					end
+				/*
+				if (redraw) begin
+					
+				end
+				
+				else begin
+					cur_x <= next_x;
+					cur_y <= next_y;
+				end
+				*/
 			if (update) begin
-                if (x == RIGHT_EDGE || x == LEFT_EDGE || y == TOP_EDGE || y == BOTTOM_EDGE)
-                    kill <= 1'b1;
-
 				current_dir <= next_dir;
 				case (current_dir)
-					S_UP: begin y <= y - 1'b1;
-						   y_out <= y_out - 1'b1;
+					S_UP: begin 
+							next_y <= next_y - 1'b1;
 						   end
-					S_RIGHT: begin x <= x + 1'b1;
-						   x_out <= x_out + 1'b1;
+					S_RIGHT: begin 
+							next_x <= next_x + 1'b1;
 						   end
-					S_LEFT: begin x <= x - 1'b1;
-						   x_out <= x_out - 1'b1;
+					S_LEFT: begin 
+							next_x <= next_x - 1'b1;
 						   end
-					S_DOWN: begin y <= y + 1'b1;
-						   y_out <= y_out + 1'b1;
+					S_DOWN: begin 
+							next_y <= next_y + 1'b1;
 						   end
 				endcase
-			end
+				end
+			if ((next_y == TOP_EDGE && current_dir == S_UP) || (next_y == BOTTOM_EDGE && current_dir == S_DOWN)
+			|| (next_x == RIGHT_EDGE && current_dir == S_RIGHT) || (next_x == LEFT_EDGE && current_dir == S_LEFT)) 
+				kill <= 1'b1;
 		end
 	end
 endmodule
+
 
 module control(clk, resetn, go, plot, update, colour_out, kill);
 	input clk;
@@ -227,6 +241,7 @@ module control(clk, resetn, go, plot, update, colour_out, kill);
 
 	output reg plot;
 	output reg update;
+//	output reg redraw;
 	
 	
 	reg [2:0] colour;
@@ -295,8 +310,16 @@ module control(clk, resetn, go, plot, update, colour_out, kill);
 		plot = 1'b0;
 		reset_frame = 1'b0;
 		update = 1'b0;
+//		redraw = 1'b0;
 		
 		case (current_state)
+		/*
+			S_START: begin
+				plot = 1'b1;
+				redraw = 1'b1;
+			end
+			*/
+			
 			S_DRAW: begin
 				plot = 1'b1;
 				colour_out = colour;
