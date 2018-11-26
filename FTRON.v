@@ -97,31 +97,28 @@ module FTRON
 		.PS2_CLK(PS2_CLK)
 	);
 	
-	always @(posedge CLOCK_50) begin
-		if (outCode == 8'h29)
+	always @(*) begin
+		game = 1'b0;
+		if (outCode == 8'h29 && valid && makeBreak)
 			begin
-			game <= 1'b1;
-			n_dir <= 2'b11;
+			game = 1'b1;
+			n_dir = 2'b11;
 			end
-		if (outCode == 8'h75)
+		if (outCode == 8'h75 && valid && makeBreak)
 			begin
-			n_dir <= 2'b01;
-			game <= 1'b0;
+			n_dir = 2'b01;
 			end
-		if (outCode == 8'h74)
+		if (outCode == 8'h74 && valid && makeBreak)
 			begin
-			n_dir <= 2'b11;
-			game <= 1'b0;
+			n_dir = 2'b11;
 			end
-		if (outCode == 8'h72)
+		if (outCode == 8'h72 && valid && makeBreak)
 			begin
-			n_dir <= 2'b00;
-			game <= 1'b0;
+			n_dir = 2'b00;
 			end
-		if (outCode == 8'h6b)
+		if (outCode == 8'h6b && valid && makeBreak)
 			begin
-			n_dir <= 2'b10;
-			game <= 1'b0;
+			n_dir = 2'b10;
 			end
 	end
 	assign dir = n_dir;
