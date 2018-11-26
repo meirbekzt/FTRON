@@ -35,11 +35,9 @@ module FTRON
 	
 	wire resetn;
 	assign resetn = KEY[0];
-	wire reset;
-	assign reset = ~KEY[3];
 
-	wire go;
-	assign go = ~KEY[1];
+	reg game;
+//	assign go = ~KEY[1];
 	// Create the colour, cur_x, cur_y and writeEn wires that are inputs to the controller.
 	wire [2:0] colour_out;
 	wire [7:0] x;
@@ -55,6 +53,8 @@ module FTRON
 	// wires that go from datapath to control
 	wire kill;
 	wire clr_screen_finish;
+	wire reset;
+	assign reset = ~KEY[3];
 
 	// Create an Instance of a VGA controller - there can be only one!
 	// Define the number of colours as well as the init_gameial background
@@ -98,17 +98,35 @@ module FTRON
 	);
 	
 	always @(posedge CLOCK_50) begin
-		if (outCode == 8'h75)
-			n_dir <= 2'b01;
-		if (outCode == 8'h74)
+		if (outCode == 8'h29)
+			begin
+			game <= 1'b1;
 			n_dir <= 2'b11;
+			end
+		if (outCode == 8'h75)
+			begin
+			n_dir <= 2'b01;
+			game <= 1'b0;
+			end
+		if (outCode == 8'h74)
+			begin
+			n_dir <= 2'b11;
+			game <= 1'b0;
+			end
 		if (outCode == 8'h72)
+			begin
 			n_dir <= 2'b00;
+			game <= 1'b0;
+			end
 		if (outCode == 8'h6b)
+			begin
 			n_dir <= 2'b10;
+			game <= 1'b0;
+			end
 	end
 	assign dir = n_dir;
-    
+   wire go;
+	assign go = game;
 	// Instantiate datapath
 	datapath d0(
 		.plot(writeEn),
