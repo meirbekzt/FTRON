@@ -102,7 +102,8 @@ module FTRON
 		if (outCode == 8'h29 && valid && makeBreak)
 			begin
 			game = 1'b1;
-			n_dir = 2'b11;
+			if (init_screen || init_game)
+				n_dir = 2'b11;
 			end
 		if (outCode == 8'h75 && valid && makeBreak)
 			begin
