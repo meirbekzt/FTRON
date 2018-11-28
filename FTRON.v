@@ -475,6 +475,10 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			S_UPDATE: begin
 				update = 1'b1;
 			end
+			
+			S_CHECK_COLLISION_1: begin
+				plot = 1'b1;
+			end
 
 			S_CHECK_COLLISION_2: begin
 				check_collision = 1'b1;
