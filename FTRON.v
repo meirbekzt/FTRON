@@ -49,6 +49,11 @@ module FTRON
 	wire init_game;
 	wire init_screen;
 	wire clr_screen;
+	wire mem_write;
+	wire select_mem_data;
+	wire select_mem_addr;
+	wire [6:0] mem_counter;
+	wire check_collision;
 
 	// wires that go from datapath to control
 	wire kill;
@@ -85,6 +90,7 @@ module FTRON
 	wire [7:0] outCode;
 	wire [1:0] dir;
 	reg [1:0] n_dir;
+
 
 
 	keyboard_press_driver keyboard_press_driver(
@@ -137,7 +143,12 @@ module FTRON
 		.init_screen(init_screen),
 		.kill(kill),
 		.clr_screen(clr_screen),
-		.clr_screen_finish(clr_screen_finish)
+		.clr_screen_finish(clr_screen_finish),
+		.select_mem_data(select_mem_data),
+		.select_mem_addr(select_mem_addr),
+		.mem_write(mem_write),
+		.mem_ctr(mem_counter),
+		.check_collision(check_collision)
 		);
 
     // Instansiate FSM control
@@ -152,11 +163,16 @@ module FTRON
 		.init_screen(init_screen),
 		.colour_out(colour_out),
 		.clr_screen(clr_screen),
-		.clr_screen_finish(clr_screen_finish)
+		.clr_screen_finish(clr_screen_finish),
+		.select_mem_data(select_mem_data),
+		.select_mem_addr(select_mem_addr),
+		.mem_ctr(mem_counter),
+		.mem_write(mem_write),
+		.check_collision(check_collision)
 		);
 endmodule
 
-module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, dir, kill, clr_screen_finish);
+module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, mem_write, dir, kill, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision);
 	input plot;
 	input resetn;
 	input clk;
@@ -165,6 +181,11 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	input clr_screen; 
 	input init_game;
 	input init_screen;
+	input mem_write;
+	input select_mem_data;
+	input select_mem_addr;
+	input [6:0] mem_ctr;
+	input check_collision;
 	
     output reg kill;
 	output reg clr_screen_finish;
@@ -190,15 +211,31 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	
 	reg [1:0] current_dir, next_dir;
 	
-	/*
-	ram_32x8(
-		.address({25'b0, next_y}),
-		.clock(),
-		.data(),
-		.wren(),
-		.q()
+	// components for RAM function
+	wire [255:0] row;
+	reg [255:0] mem_data_in;
+	reg [6:0] mem_addr_in;
+
+	ram128x256 grid(
+		.address(mem_addr_in),
+		.clock(clk),
+		.data(mem_data_in),
+		.wren(mem_write),
+		.q(row)
 	);
-	*/
+
+   // Muxes for address and data inputs to memory
+   always @(*) begin
+	   if (select_mem_data) 
+		   mem_data_in = 256'b0;
+	   else 
+		   mem_data_in = row | 256'b1 << next_x;
+
+	   if (select_mem_addr)
+		   mem_addr_in = mem_ctr;
+	   else
+		   mem_addr_in = next_y;
+   end
 
 	always @(*)
 	begin: state_table
@@ -255,7 +292,6 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			else begin
 				cur_x <= next_x;
 				cur_y <= next_y;
-				// mem write next_x and next_y into memory
 			end
 		end
 
@@ -278,15 +314,19 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			
 		end
 
-		if (((next_y == TOP_EDGE && current_dir == S_UP) || (next_y == BOTTOM_EDGE && current_dir == S_DOWN)
-		|| (next_x == RIGHT_EDGE && current_dir == S_RIGHT) || (next_x == LEFT_EDGE && current_dir == S_LEFT)) && !clr_screen) 
-			kill <= 1'b1;
-		// if statement for checking collisions, if next_x
+		else if (check_collision) begin
+			if (((next_y == TOP_EDGE && current_dir == S_UP) || (next_y == BOTTOM_EDGE && current_dir == S_DOWN)
+			|| (next_x == RIGHT_EDGE && current_dir == S_RIGHT) || (next_x == LEFT_EDGE && current_dir == S_LEFT))) 
+				kill <= 1'b1;
+
+			if (|(row & (256'b1 << next_x)))
+					kill <= 1'b1;
+		end
 	end
 endmodule
 
 
-module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, colour_out, kill, clr_screen_finish);
+module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, colour_out, kill, clr_screen_finish, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision);
 	input clk;
 	input resetn;
 	input go;
@@ -294,11 +334,17 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	input clr_screen_finish;
 
 	output reg [2:0] colour_out;
+	// enable signals
 	output reg plot;
 	output reg update;
 	output reg clr_screen;
 	output reg init_game;
 	output reg init_screen;
+	output reg mem_write;
+	output reg select_mem_data;
+	output reg select_mem_addr;
+	output reg check_collision;
+	output [6:0] mem_ctr;
 	
 	reg [2:0] colour;
 	
@@ -308,7 +354,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	wire [19:0] delay_ctr;
 	wire [3:0] frame_ctr;
 
-	reg [2:0] current_state, next_state;
+	reg [3:0] current_state, next_state;
 	
 	parameter player = 1;
 	always@(*)
@@ -321,20 +367,19 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			end
 	end
 	
-	
-	localparam		S_START				= 3'd0,
-					S_CLEAR				= 3'd1,
-					S_SETUP				= 3'd2,
-					S_DRAW		= 3'd3,
-					S_DRAW_FINISH = 3'd4,
-					S_WAIT				= 3'd5,
-					S_UPDATE		=3'd6,
-                    S_KILL          = 3'd7,
+	localparam		S_START				= 4'd0,
+					S_CLEAR				= 4'd1,
+					S_SETUP				= 4'd2,
+					S_DRAW		= 4'd3,
+					S_DRAW_FINISH = 4'd4,
+					S_WAIT				= 4'd5,
+					S_UPDATE		=4'd6,
+					S_CHECK_COLLISION_1 = 4'd7,
+					S_CHECK_COLLISION_2 = 4'd8,
+                    S_KILL          = 4'd9,
 					BG_COLOUR 	= 3'b000,
 					PLAYER_1_COLOUR = 3'b010,
 					PLAYER_2_COLOUR = 3'b011;
-					
-
 
 	n_counter #(19) delay_counter(
 		.clk(clk),
@@ -352,16 +397,26 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		.q(frame_ctr)
 		);
 
+	n_counter #(7) mem_counter(
+		.clk(clk),
+		.resetn(mem_write),
+		.d(159),
+		.enable(1),
+		.q(mem_ctr)
+	);
+
 	always @(*)
 	begin: state_table
 		case (current_state)
 			S_START: next_state = go ? S_CLEAR : S_START;
-			S_CLEAR: next_state =  clr_screen_finish ? S_SETUP : S_CLEAR;
-			S_SETUP: next_state = S_DRAW;
+			S_CLEAR: next_state = 1 || clr_screen_finish ? S_SETUP : S_CLEAR;
+			S_SETUP: next_state = &mem_ctr ? S_DRAW : S_SETUP;
 			S_DRAW: next_state = S_DRAW_FINISH;
 			S_DRAW_FINISH: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
-			S_UPDATE: next_state = kill ? S_KILL : S_DRAW;
+			S_UPDATE: next_state = S_CHECK_COLLISION_1;
+			S_CHECK_COLLISION_1: next_state = S_CHECK_COLLISION_2;
+			S_CHECK_COLLISION_2: next_state = kill ? S_KILL : S_DRAW;
             S_KILL: next_state = S_START;
 			default: next_state = S_START;
 		endcase
@@ -377,6 +432,10 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		update = 1'b0;
 		init_game = 1'b0;
 		init_screen = 1'b0;
+		mem_write = 1'b0;
+		select_mem_data = 1'b0;
+		select_mem_addr = 1'b0;
+		check_collision = 1'b0;
 		
 		case (current_state)
 			S_START: begin
@@ -384,23 +443,28 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			end
 			
 			S_CLEAR: begin
-				plot = 1'b1;
-				clr_screen = 1'b1;
+				plot = 1'b0;
+				clr_screen = 1'b0;
 				colour_out = BG_COLOUR;
 			end
 
 			S_SETUP: begin
 				init_game = 1'b1;
+				mem_write = 1'b1;
+				select_mem_data = 1'b1;
+				select_mem_addr = 1'b1;
 			end
 			
 			S_DRAW: begin
 				plot = 1'b1;
 				colour_out = PLAYER_1_COLOUR;
+				mem_write = 1'b1;
 			end
 
 			S_DRAW_FINISH: begin
 				plot = 1'b1;
 				colour_out = PLAYER_1_COLOUR;
+				mem_write = 1'b1;
 			end
 
 			S_WAIT: begin
@@ -409,6 +473,10 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			
 			S_UPDATE: begin
 				update = 1'b1;
+			end
+
+			S_CHECK_COLLISION_2: begin
+				check_collision = 1'b1;
 			end
 		endcase
 	end
