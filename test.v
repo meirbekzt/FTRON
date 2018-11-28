@@ -21,7 +21,7 @@ module test(resetn, go, CLOCK_50, outCode);
 	wire mem_write;
 	wire select_mem_data;
 	wire select_mem_addr;
-	wire [6:0] mem_counter;
+	wire [6:0] mem_ctr;
 	wire check_collision;
 
 	// wires that go from datapath to control
@@ -60,7 +60,7 @@ module test(resetn, go, CLOCK_50, outCode);
 		.select_mem_data(select_mem_data),
 		.select_mem_addr(select_mem_addr),
 		.mem_write(mem_write),
-		.mem_ctr(mem_counter),
+		.mem_ctr(mem_ctr),
 		.check_collision(check_collision)
 		);
 
@@ -79,7 +79,7 @@ module test(resetn, go, CLOCK_50, outCode);
 		.clr_screen_finish(clr_screen_finish),
 		.select_mem_data(select_mem_data),
 		.select_mem_addr(select_mem_addr),
-		.mem_ctr(mem_counter),
+		.mem_ctr(mem_ctr),
 		.mem_write(mem_write),
 		.check_collision(check_collision)
 		);
@@ -310,10 +310,10 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		.q(frame_ctr)
 		);
 
-	n_counter #(7) mem_counter(
+	n_counter #(6) mem_counter(
 		.clk(clk),
 		.resetn(mem_write),
-		.d(159),
+		.d(7'd119),
 		.enable(1),
 		.q(mem_ctr)
 	);
@@ -323,7 +323,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		case (current_state)
 			S_START: next_state = go ? S_CLEAR : S_START;
 			S_CLEAR: next_state =  clr_screen_finish ? S_SETUP : S_CLEAR;
-			S_SETUP: next_state = &mem_ctr ? S_DRAW : S_SETUP;
+			S_SETUP: next_state = ~|mem_ctr ? S_DRAW : S_SETUP;
 			S_DRAW: next_state = S_DRAW_FINISH;
 			S_DRAW_FINISH: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
