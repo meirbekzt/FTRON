@@ -1,11 +1,15 @@
 `include "n_counter.v"
 `include "ram128x256.v"
+`include "hex_decoder.v"
 
-module test(resetn, CLOCK_50, outCode);
+module test(resetn, CLOCK_50, outCode, HEX0, HEX5);
     input resetn;
     input CLOCK_50;
     input [7:0] outCode;
-
+	
+	output [6:0] HEX0;
+	output [6:0] HEX5;
+	
 	// Create the colour, cur_x, cur_y and writeEn wires that are inputs to the controller.
 	wire [2:0] colour_out;
 	wire [7:0] x;
@@ -26,7 +30,8 @@ module test(resetn, CLOCK_50, outCode);
 	reg game;
 
 	// wires that go from datapath to control
-	wire kill;
+	wire kill_p2;
+	wire kill_p1;
 	wire clr_screen_finish;
 
 	wire [1:0] p1_dir;
@@ -50,6 +55,8 @@ module test(resetn, CLOCK_50, outCode);
 	wire go;
 	assign go = game;
 	wire [1:0] select_player;
+	wire [3:0] p1_score;
+	wire [3:0] p2_score;
 	
 	// Instantiate datapath
 	datapath d0(
@@ -63,7 +70,8 @@ module test(resetn, CLOCK_50, outCode);
 		.update(update),
 		.init_game(init_game),
 		.init_screen(init_screen),
-		.kill(kill),
+		.kill_p1(kill_p1),
+		.kill_p2(kill_p2),
 		.clr_screen(clr_screen),
 		.select_player(select_player),
 		.clr_screen_finish(clr_screen_finish),
@@ -79,7 +87,8 @@ module test(resetn, CLOCK_50, outCode);
 		.clk(CLOCK_50),
 		.resetn(resetn),
 		.go(go),
-		.kill(kill),
+		.kill_p1(kill_p1),
+		.kill_p2(kill_p2),
 		.plot(writeEn),
 		.update(update),
 		.init_game(init_game),
@@ -92,11 +101,23 @@ module test(resetn, CLOCK_50, outCode);
 		.select_mem_addr(select_mem_addr),
 		.mem_ctr(mem_ctr),
 		.mem_write(mem_write),
-		.check_collision(check_collision)
+		.check_collision(check_collision),
+		.p1_score(p1_score),
+		.p2_score(p2_score)
+		);
+	
+	hex_decoder p1_s(
+		.hex_digit(p1_score),
+		.segments(HEX0)
+		);
+	
+	hex_decoder p2_s(
+		.hex_digit(p2_score),
+		.segments(HEX5)
 		);
 endmodule
 
-module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision);
+module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill_p1, kill_p2, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision);
 	input plot;
 	input resetn;
 	input clk;
@@ -113,7 +134,8 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	input [6:0] mem_ctr;
 	input check_collision;
 	
-    output reg kill;
+    output reg kill_p1;
+	output reg kill_p2;
 	output reg clr_screen_finish;
 	output reg [7:0] cur_x;
 	output reg [6:0] cur_y;
@@ -204,7 +226,8 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			next_y <= 7'd1;
 			p1_cur_dir <= S_P1_RIGHT;
 			p2_cur_dir <= S_P2_LEFT;
-            kill <= 1'b0;
+            kill_p1 <= 1'b0;
+			kill_p2 <= 1'b0;
 			clr_screen_finish <= 1'b0;
 		end
 	
@@ -216,11 +239,12 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			p2_next_y <= P2_START_Y;
 			p1_cur_dir <= S_P1_RIGHT;
 			p2_cur_dir <= S_P2_LEFT;
-			kill <= 1'b0;
+			kill_p1 <= 1'b0;
+			kill_p2 <= 1'b0;
 			clr_screen_finish <= 1'b0;
 		end
 			
-		else if (plot && ~kill) begin
+		else if (plot && ~(kill_p1 || kill_p2)) begin
 			if (clr_screen) begin
 				if (next_y == 7'd11) 
 					clr_screen_finish <= 1'b1;
@@ -280,23 +304,26 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			
 		end
 
-//		else if (0 && check_collision) begin
-//			if (((next_y == TOP_EDGE && current_dir == S_UP) || (next_y == BOTTOM_EDGE && current_dir == S_DOWN)
-//			|| (next_x == RIGHT_EDGE && current_dir == S_RIGHT) || (next_x == LEFT_EDGE && current_dir == S_LEFT))) 
-//				kill <= 1'b1;
-//
-//			if (|(row & (256'b1 << next_x)))
-//					kill <= 1'b1;
-//		end
+		else if (check_collision) begin
+			if (((p1_next_y == TOP_EDGE && p1_cur_dir == S_P1_UP) || (p1_next_y == BOTTOM_EDGE && p1_cur_dir == S_P1_DOWN)
+			|| (p1_next_x == RIGHT_EDGE && p1_cur_dir == S_P1_RIGHT) || (p1_next_x == LEFT_EDGE && p1_cur_dir == S_P1_LEFT))) 
+				kill_p1 <= 1'b1;
+			
+			if (((p2_next_y == TOP_EDGE && p2_cur_dir == S_P2_UP) || (p2_next_y == BOTTOM_EDGE && p2_cur_dir == S_P2_DOWN)
+			|| (p2_next_x == RIGHT_EDGE && p2_cur_dir == S_P2_RIGHT) || (p2_next_x == LEFT_EDGE && p2_cur_dir == S_P2_LEFT))) 
+				kill_p2 <= 1'b1;
+			// if (|(row & (256'b1 << next_x)))
+					// kill <= 1'b1;
+		end
 	end
 endmodule
 
-
-module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, colour_out, kill, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision);
+module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, colour_out, kill_p1, kill_p2, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision, p1_score, p2_score);
 	input clk;
 	input resetn;
 	input go;
-    input kill;
+    input kill_p1;
+	input kill_p2;
 	input clr_screen_finish;
 
 	output reg [2:0] colour_out;
@@ -311,9 +338,14 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	output reg select_mem_addr;
 	output reg check_collision;
 	output reg [1:0] select_player;
+	output reg [3:0] p1_score;
+	output reg [3:0] p2_score;
 	output [6:0] mem_ctr;
 	
-	reg [2:0] colour;
+	initial begin
+		p1_score = 4'b0;
+		p2_score = 4'b0;
+	end
 	
 	// internal regs 
 	reg reset_frame;
@@ -323,24 +355,13 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 
 	reg [3:0] current_state, next_state;
 	
-	parameter player = 1;
-	always@(*)
-	begin
-		if (player == 1) begin
-			colour = 3'b010;
-			end
-		else begin
-			colour = 3'b011;
-			end
-	end
-	
 	localparam		S_START				= 4'd0,
 					S_CLEAR				= 4'd1,
 					S_SETUP				= 4'd2,
 					S_DRAW_P1		= 4'd3,
-					S_DRAW_FINISH_P1 = 4'd4,
+//					S_DRAW_FINISH_P1 = 4'd4,
 					S_DRAW_P2 = 4'd5,
-					S_DRAW_FINISH_P2 = 4'd6,
+//					S_DRAW_FINISH_P2 = 4'd6,
 					S_WAIT				= 4'd7,
 					S_UPDATE		=4'd8,
 					S_CHECK_COLLISION_1 = 4'd9,
@@ -380,14 +401,14 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			S_START: next_state = go ? S_CLEAR : S_START;
 			S_CLEAR: next_state =  clr_screen_finish ? S_SETUP : S_CLEAR;
 			S_SETUP: next_state = ~|mem_ctr ? S_DRAW_P1 : S_SETUP;
-			S_DRAW_P1: next_state = S_DRAW_FINISH_P1;
-			S_DRAW_FINISH_P1: next_state = S_DRAW_P2;
-			S_DRAW_P2: next_state = S_DRAW_FINISH_P2;
-			S_DRAW_FINISH_P2: next_state = S_WAIT;
+			S_DRAW_P1: next_state = S_DRAW_P2;
+//			S_DRAW_FINISH_P1: next_state = S_DRAW_P2;
+			S_DRAW_P2: next_state = S_WAIT;
+//			S_DRAW_FINISH_P2: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
 			S_UPDATE: next_state = S_CHECK_COLLISION_1;
 			S_CHECK_COLLISION_1: next_state = S_CHECK_COLLISION_2;
-			S_CHECK_COLLISION_2: next_state = kill ? S_KILL : S_DRAW_P1;
+			S_CHECK_COLLISION_2: next_state = (kill_p1 || kill_p2) ? S_KILL : S_DRAW_P1;
             S_KILL: next_state = S_START;
 			default: next_state = S_START;
 		endcase
@@ -434,12 +455,6 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 				colour_out = PLAYER_1_COLOUR;
 				mem_write = 1'b1;
 			end
-
-			S_DRAW_FINISH_P1: begin
-				plot = 1'b1;
-				colour_out = PLAYER_1_COLOUR;
-				mem_write = 1'b1;
-			end
 			
 			S_DRAW_P2: begin
 				plot = 1'b1;
@@ -448,12 +463,12 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 				select_player = 2'b01;
 			end
 
-			S_DRAW_FINISH_P2: begin
-				plot = 1'b1;
-				colour_out = PLAYER_2_COLOUR;
-				mem_write = 1'b1;
-				select_player = 2'b01;
-			end
+//			S_DRAW_FINISH_P2: begin
+//				plot = 1'b1;
+//				colour_out = PLAYER_2_COLOUR;
+//				mem_write = 1'b1;
+//				select_player = 2'b01;
+//			end
 
 			S_WAIT: begin
 				reset_frame = 1'b1;
@@ -468,6 +483,13 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 
 			S_CHECK_COLLISION_2: begin
 				check_collision = 1'b1;
+			end
+			
+			S_KILL: begin
+				if (kill_p1)
+					p2_score = p2_score + 1'b1;
+				if (kill_p2)
+					p1_score = p1_score + 1'b1;
 			end
 		endcase
 	end
