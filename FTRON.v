@@ -122,35 +122,35 @@ module FTRON
 			end
 		if (outCode == 8'h75 && valid && makeBreak)
 			begin
-			p1_n_dir = 2'b01;
+			p2_n_dir = 2'b01;
 			end
 		if (outCode == 8'h74 && valid && makeBreak)
 			begin
-			p1_n_dir = 2'b11;
+			p2_n_dir = 2'b11;
 			end
 		if (outCode == 8'h72 && valid && makeBreak)
 			begin
-			p1_n_dir = 2'b00;
+			p2_n_dir = 2'b00;
 			end
 		if (outCode == 8'h6b && valid && makeBreak)
 			begin
-			p1_n_dir = 2'b10;
+			p2_n_dir = 2'b10;
 			end
 		if (outCode == 8'h1d && valid && makeBreak)
 			begin
-			p2_n_dir = 2'b01;
+			p1_n_dir = 2'b01;
 			end
 		if (outCode == 8'h23 && valid && makeBreak)
 			begin
-			p2_n_dir = 2'b11;
+			p1_n_dir = 2'b11;
 			end
 		if (outCode == 8'h1b && valid && makeBreak)
 			begin
-			p2_n_dir = 2'b00;
+			p1_n_dir = 2'b00;
 			end
 		if (outCode == 8'h1c && valid && makeBreak)
 			begin
-			p2_n_dir = 2'b10;
+			p1_n_dir = 2'b10;
 			end
 	end
 	assign p1_dir = p1_n_dir;
@@ -470,9 +470,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 					S_CLEAR				= 4'd1,
 					S_SETUP				= 4'd2,
 					S_DRAW_P1		= 4'd3,
-//					S_DRAW_FINISH_P1 = 4'd4,
 					S_DRAW_P2 = 4'd5,
-//					S_DRAW_FINISH_P2 = 4'd6,
 					S_WAIT				= 4'd7,
 					S_UPDATE		=4'd8,
 					S_CHECK_COLLISION_1 = 4'd9,
@@ -510,13 +508,11 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			S_CLEAR: next_state =  clr_screen_finish ? S_SETUP : S_CLEAR;
 			S_SETUP: next_state = ~|mem_ctr ? S_DRAW_P1 : S_SETUP;
 			S_DRAW_P1: next_state = S_DRAW_P2;
-//			S_DRAW_FINISH_P1: next_state = S_DRAW_P2;
 			S_DRAW_P2: next_state = S_WAIT;
-//			S_DRAW_FINISH_P2: next_state = S_WAIT;
-			S_WAIT: next_state = ~|frame_ctr ? S_UPDATE : S_WAIT;
-			S_UPDATE: next_state = S_CHECK_COLLISION_1;
+			S_WAIT: next_state = ~|frame_ctr ? S_CHECK_COLLISION_1 : S_WAIT;
 			S_CHECK_COLLISION_1: next_state = S_CHECK_COLLISION_2;
-			S_CHECK_COLLISION_2: next_state = (kill_p1 || kill_p2) ? S_KILL : S_DRAW_P1;
+			S_CHECK_COLLISION_2: next_state = (kill_p1 || kill_p2) ? S_KILL : S_UPDATE;
+			S_UPDATE: next_state = S_DRAW_P1;
             S_KILL: next_state = S_START;
 			default: next_state = S_START;
 		endcase
@@ -559,25 +555,12 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 				plot = 1'b1;
 				mem_write = 1'b1;
 			end
-//
-//			S_DRAW_FINISH_P1: begin
-//				plot = 1'b1;
-//				colour_out = PLAYER_1_COLOUR;
-//				mem_write = 1'b1;
-//			end
-//			
+		
 			S_DRAW_P2: begin
 				plot = 1'b1;
 				mem_write = 1'b1;
 				select_player = 2'b01;
 			end
-
-//			S_DRAW_FINISH_P2: begin
-//				plot = 1'b1;
-//				colour_out = PLAYER_2_COLOUR;
-//				mem_write = 1'b1;
-//				select_player = 2'b01;
-//			end
 
 			S_WAIT: begin
 				reset_frame = 1'b1;
@@ -588,7 +571,6 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			end
 			
 			S_CHECK_COLLISION_1: begin
-//				plot = 1'b1;
 			end
 
 			S_CHECK_COLLISION_2: begin
