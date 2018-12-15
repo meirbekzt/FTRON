@@ -52,6 +52,7 @@
 *.tcl
 *.qpf
 *.qsf
+*.wlf
 *.txt
 *.txt # Explicitly add any text files used
 *~
@@ -67,3 +68,7 @@
 */testbench/
 */*_sim/
 /output_files/
+
+# ignore ModelSim generated folders
+/work/
+vsim
