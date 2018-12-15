@@ -185,7 +185,9 @@ module FTRON
 		.mem_ctr(mem_ctr),
 		.check_collision(check_collision),
 		.check_collision_2(check_collision_2),
-		.colour_out(colour_out)
+		.colour_out(colour_out),
+		.p1_score(p1_score),
+		.p2_score(p2_score)
 		);
 
     // Instansiate FSM control
@@ -207,23 +209,21 @@ module FTRON
 		.mem_ctr(mem_ctr),
 		.mem_write(mem_write),
 		.check_collision(check_collision),
-		.check_collision_2(check_collision_2),
-		.p1_score(p1_score),
-		.p2_score(p2_score)
+		.check_collision_2(check_collision_2)
 		);
 	
 	hex_decoder p1_s(
 		.hex_digit(p1_score),
-		.segments(HEX0)
+		.segments(HEX5)
 		);
 	
 	hex_decoder p2_s(
 		.hex_digit(p2_score),
-		.segments(HEX5)
+		.segments(HEX0)
 		);
 endmodule
 
-module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill_p1, kill_p2, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2, colour_out);
+module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill_p1, kill_p2, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2, colour_out, p1_score, p2_score);
 	input plot;
 	input resetn;
 	input clk;
@@ -247,6 +247,13 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	output reg [7:0] cur_x;
 	output reg [6:0] cur_y;
 	output reg [2:0] colour_out;
+	output reg [3:0] p1_score;
+	output reg [3:0] p2_score;
+	
+	initial begin
+		p1_score = 4'b0;
+		p2_score = 4'b0;
+	end
 	
 	localparam 	S_P1_UP = 3'd0,
 			    S_P1_RIGHT = 3'd1,
@@ -345,6 +352,10 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	end
 	
 	always @(posedge clk) begin
+		if (!resetn) begin
+			p1_score <= 4'b0;
+			p2_score <= 4'b0;
+		end
 		if (init_screen) begin
 			cur_x <= 8'd1;
 			cur_y <= 7'd1;
@@ -438,24 +449,32 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 
 		else if (check_collision) begin
 			if (((p1_next_y == TOP_EDGE && p1_cur_dir == S_P1_UP) || (p1_next_y == BOTTOM_EDGE && p1_cur_dir == S_P1_DOWN)
-			|| (p1_next_x == RIGHT_EDGE && p1_cur_dir == S_P1_RIGHT) || (p1_next_x == LEFT_EDGE && p1_cur_dir == S_P1_LEFT))) 
+			|| (p1_next_x == RIGHT_EDGE && p1_cur_dir == S_P1_RIGHT) || (p1_next_x == LEFT_EDGE && p1_cur_dir == S_P1_LEFT))) begin
 				kill_p1 <= 1'b1;
+				p2_score <= p2_score + 1'b1;
+			end
 			
 			if (((p2_next_y == TOP_EDGE && p2_cur_dir == S_P2_UP) || (p2_next_y == BOTTOM_EDGE && p2_cur_dir == S_P2_DOWN)
-			|| (p2_next_x == RIGHT_EDGE && p2_cur_dir == S_P2_RIGHT) || (p2_next_x == LEFT_EDGE && p2_cur_dir == S_P2_LEFT))) 
+			|| (p2_next_x == RIGHT_EDGE && p2_cur_dir == S_P2_RIGHT) || (p2_next_x == LEFT_EDGE && p2_cur_dir == S_P2_LEFT))) begin
 				kill_p2 <= 1'b1;
+				p1_score <= p1_score + 1'b1;
+			end
 		end
 
 
 		else if (check_collision_2) begin
 			if (select_player == 2'b00) begin
-				if (|(row & (256'b1 << p1_next_x)))
+				if (|(row & (256'b1 << p1_next_x))) begin
 					kill_p1 <= 1'b1;
+					p2_score <= p2_score + 1'b1;
+				end
 			end
 
 			else begin
-				if (|(row & (256'b1 << p2_next_x)))
+				if (|(row & (256'b1 << p2_next_x))) begin
 					kill_p2 <= 1'b1;
+					p1_score <= p1_score + 1'b1;
+				end
 			end
 		end
 
@@ -463,7 +482,7 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 
 endmodule
 
-module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, kill_p1, kill_p2, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2, p1_score, p2_score);
+module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, kill_p1, kill_p2, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2);
 	input clk;
 	input resetn;
 	input go;
@@ -483,14 +502,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	output reg check_collision;
 	output reg check_collision_2;
 	output reg [1:0] select_player;
-	output reg [3:0] p1_score;
-	output reg [3:0] p2_score;
 	output [6:0] mem_ctr;
-	
-	initial begin
-		p1_score = 4'b0;
-		p2_score = 4'b0;
-	end
 	
 	// internal regs 
 	reg reset_frame;
@@ -649,13 +661,6 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 			S_CHECK_COLLISION_P2: begin
 				select_player = 2'b01;
 				check_collision_2 = 1'b1;
-			end
-			
-			S_KILL: begin
-				if (kill_p1)
-					p2_score = p2_score + 1'b1;
-				if (kill_p2)
-					p1_score = p1_score + 1'b1;
 			end
 		endcase
 	end
