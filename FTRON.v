@@ -59,6 +59,7 @@ module FTRON
 	wire select_mem_addr;
 	wire [6:0] mem_ctr;
 	wire check_collision;
+	wire check_collision_2;
 
 	// wires that go from datapath to control
 	wire kill_p1;
@@ -183,6 +184,7 @@ module FTRON
 		.mem_write(mem_write),
 		.mem_ctr(mem_ctr),
 		.check_collision(check_collision),
+		.check_collision_2(check_collision_2),
 		.colour_out(colour_out)
 		);
 
@@ -205,6 +207,7 @@ module FTRON
 		.mem_ctr(mem_ctr),
 		.mem_write(mem_write),
 		.check_collision(check_collision),
+		.check_collision_2(check_collision_2),
 		.p1_score(p1_score),
 		.p2_score(p2_score)
 		);
@@ -220,7 +223,7 @@ module FTRON
 		);
 endmodule
 
-module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill_p1, kill_p2, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision, colour_out);
+module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen, clr_screen, select_player, mem_write, p1_dir, p2_dir, kill_p1, kill_p2, clr_screen_finish, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2, colour_out);
 	input plot;
 	input resetn;
 	input clk;
@@ -236,6 +239,7 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	input select_mem_addr;
 	input [6:0] mem_ctr;
 	input check_collision;
+	input check_collision_2;
 	
     output reg kill_p1;
 	output reg kill_p2;
@@ -291,16 +295,31 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 	);
 
    // Muxes for address and data inputs to memory
+   // if select_mem_data == 0, then we clear the screen
+   // if select_mem_data == 1 and select_player == 0, player 1's coordinate is
+   // inputted
+   // if select_mem_data == 1 and select_player == 1, player 2's coordinate is
+   // inputted
+
    always @(*) begin
 	   if (select_mem_data) 
 		   mem_data_in = 256'b0;
-	   else 
-		   mem_data_in = row | 256'b1 << next_x;
+	   else begin
+		   if (select_player == 2'b00)
+			   mem_data_in = row | 256'b1 << p1_next_x;
+		   else
+			   mem_data_in = row | 256'b1 << p2_next_x;
+		   //mem_data_in = row | 256'b1 << next_x;
+	   end
 
 	   if (select_mem_addr)
 		   mem_addr_in = mem_ctr;
-	   else
-		   mem_addr_in = next_y;
+	   else begin
+		   if (select_player == 2'b00) 
+			  mem_addr_in = p1_next_y; 
+		  else 
+			  mem_addr_in = p2_next_y;
+	   end
    end
 
 	always @(*)
@@ -425,12 +444,26 @@ module datapath(plot, resetn, clk, cur_x, cur_y, update, init_game, init_screen,
 			if (((p2_next_y == TOP_EDGE && p2_cur_dir == S_P2_UP) || (p2_next_y == BOTTOM_EDGE && p2_cur_dir == S_P2_DOWN)
 			|| (p2_next_x == RIGHT_EDGE && p2_cur_dir == S_P2_RIGHT) || (p2_next_x == LEFT_EDGE && p2_cur_dir == S_P2_LEFT))) 
 				kill_p2 <= 1'b1;
+		end
+
+
+		else if (check_collision_2) begin
+			if (select_player == 2'b00) begin
+				if (|(row & (256'b1 << p1_next_x)))
+					kill_p1 <= 1'b1;
 			end
+
+			else begin
+				if (|(row & (256'b1 << p2_next_x)))
+					kill_p2 <= 1'b1;
+			end
+		end
+
 	end
+
 endmodule
 
-
-module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, kill_p1, kill_p2, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision, p1_score, p2_score);
+module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen, kill_p1, kill_p2, clr_screen_finish, select_player, mem_write, select_mem_data, select_mem_addr, mem_ctr, check_collision, check_collision_2, p1_score, p2_score);
 	input clk;
 	input resetn;
 	input go;
@@ -448,6 +481,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	output reg select_mem_data;
 	output reg select_mem_addr;
 	output reg check_collision;
+	output reg check_collision_2;
 	output reg [1:0] select_player;
 	output reg [3:0] p1_score;
 	output reg [3:0] p2_score;
@@ -464,18 +498,25 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 	wire [19:0] delay_ctr;
 	wire [3:0] frame_ctr;
 
-	reg [3:0] current_state, next_state;
+	reg [4:0] current_state, next_state;
 	
-	localparam		S_START				= 4'd0,
-					S_CLEAR				= 4'd1,
-					S_SETUP				= 4'd2,
-					S_DRAW_P1		= 4'd3,
-					S_DRAW_P2 = 4'd5,
-					S_WAIT				= 4'd7,
-					S_UPDATE		=4'd8,
-					S_CHECK_COLLISION_1 = 4'd9,
-					S_CHECK_COLLISION_2 = 4'd10,
-                    S_KILL          = 4'd11;
+	localparam		S_START				= 5'd0,
+					S_CLEAR				= 5'd1,
+					S_SETUP				= 5'd2,
+					S_CHANGE_TO_P1		= 5'd14,
+					S_DRAW_P1		= 5'd3,
+					S_BUFFER = 5'd16,
+					S_CHANGE_TO_P2		= 5'd15,
+					S_DRAW_P2 = 5'd4,
+					S_WAIT				= 5'd5,
+					S_UPDATE		= 5'd6,
+					S_CHECK_COLLISION_1 = 5'd7,
+					S_CHECK_COLLISION_2 = 5'd8,
+					S_CHECK_COLLISION_P1_SETUP = 5'd10,
+					S_CHECK_COLLISION_P1 = 5'd11,
+					S_CHECK_COLLISION_P2_SETUP = 5'd12,
+					S_CHECK_COLLISION_P2 = 5'd13,
+                    S_KILL          = 5'd9;
 
 	n_counter #(19) delay_counter(
 		.clk(clk),
@@ -506,13 +547,20 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		case (current_state)
 			S_START: next_state = go ? S_CLEAR : S_START;
 			S_CLEAR: next_state =  clr_screen_finish ? S_SETUP : S_CLEAR;
-			S_SETUP: next_state = ~|mem_ctr ? S_DRAW_P1 : S_SETUP;
-			S_DRAW_P1: next_state = S_DRAW_P2;
+			S_SETUP: next_state = ~|mem_ctr ? S_CHANGE_TO_P1 : S_SETUP;
+			S_CHANGE_TO_P1: next_state = S_DRAW_P1;
+			S_DRAW_P1: next_state = S_BUFFER;
+			S_BUFFER: next_state = S_CHANGE_TO_P2;
+			S_CHANGE_TO_P2: next_state = S_DRAW_P2;
 			S_DRAW_P2: next_state = S_WAIT;
 			S_WAIT: next_state = ~|frame_ctr ? S_CHECK_COLLISION_1 : S_WAIT;
 			S_CHECK_COLLISION_1: next_state = S_CHECK_COLLISION_2;
 			S_CHECK_COLLISION_2: next_state = (kill_p1 || kill_p2) ? S_KILL : S_UPDATE;
-			S_UPDATE: next_state = S_DRAW_P1;
+			S_UPDATE: next_state = S_CHECK_COLLISION_P1_SETUP;
+			S_CHECK_COLLISION_P1_SETUP: next_state = S_CHECK_COLLISION_P1;
+			S_CHECK_COLLISION_P1: next_state = kill_p1 ? S_KILL : S_CHECK_COLLISION_P2_SETUP; 
+			S_CHECK_COLLISION_P2_SETUP: next_state = S_CHECK_COLLISION_P2;
+			S_CHECK_COLLISION_P2: next_state = kill_p2 ? S_KILL : S_CHANGE_TO_P1; 
             S_KILL: next_state = S_START;
 			default: next_state = S_START;
 		endcase
@@ -532,6 +580,7 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 		select_mem_data = 1'b0;
 		select_mem_addr = 1'b0;
 		check_collision = 1'b0;
+		check_collision_2 = 1'b0;
 		select_player = 2'b00;
 		
 		case (current_state)
@@ -551,15 +600,24 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 				select_mem_addr = 1'b1;
 			end
 			
+			S_CHANGE_TO_P1: begin
+				plot = 1'b1;
+			end
+
 			S_DRAW_P1: begin
 				plot = 1'b1;
 				mem_write = 1'b1;
 			end
-		
+
+			S_CHANGE_TO_P2: begin
+				select_player = 1'b01;
+				plot = 1'b1;
+			end
+
 			S_DRAW_P2: begin
 				plot = 1'b1;
+				select_player = 1'b01;
 				mem_write = 1'b1;
-				select_player = 2'b01;
 			end
 
 			S_WAIT: begin
@@ -575,6 +633,22 @@ module control(clk, resetn, go, plot, update, clr_screen, init_game, init_screen
 
 			S_CHECK_COLLISION_2: begin
 				check_collision = 1'b1;
+			end
+
+			S_CHECK_COLLISION_P1_SETUP: begin
+			end
+
+			S_CHECK_COLLISION_P1: begin
+				check_collision_2 = 1'b1;
+			end
+
+			S_CHECK_COLLISION_P2_SETUP: begin
+				select_player = 2'b01;
+			end
+
+			S_CHECK_COLLISION_P2: begin
+				select_player = 2'b01;
+				check_collision_2 = 1'b1;
 			end
 			
 			S_KILL: begin
